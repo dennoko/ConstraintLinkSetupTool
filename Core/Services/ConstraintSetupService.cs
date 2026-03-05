@@ -15,9 +15,9 @@ namespace Tiloop.ConstraintLinkSetupTool.Core.Services
                 return;
 
             // 1. 義手（パーツ）をアバターのルート直下に配置する。
-            if (config.ProstheticRoot.parent != config.AvatarRoot)
+            if (config.TargetProstheticRoot.parent != config.TargetAvatarRoot)
             {
-                Undo.SetTransformParent(config.ProstheticRoot, config.AvatarRoot, "Reparent Prosthetic");
+                Undo.SetTransformParent(config.TargetProstheticRoot, config.TargetAvatarRoot, "Reparent Prosthetic");
                 // 配置（座標）自体はユーザーが既に行った前提とする
             }
 
@@ -104,14 +104,16 @@ namespace Tiloop.ConstraintLinkSetupTool.Core.Services
             // AtRest に現在のLocal Rotationを保存
             rotConstraint.rotationAtRest = prostheticBone.localEulerAngles;
             
+            // 現在の姿勢からターゲットとの差分(Offset)を計算して保持
+            Quaternion avatarRot = avatarScaleBone.rotation;
+            Quaternion prostheticRot = prostheticBone.rotation;
+            // new_rot = avatarRot * rotationOffset
+            Quaternion offset = Quaternion.Inverse(avatarRot) * prostheticRot;
+            rotConstraint.rotationOffset = offset.eulerAngles;
+            
             // Active ＆ Lock処理
             rotConstraint.locked = true;
             rotConstraint.constraintActive = true;
-            
-            // Unityの内部APIを呼ばずにオフセット維持する場合の設定等、Editor上のActivateと等価なことを行うために手動で計算が必要な場合があるが
-            // コンポーネントをアクティブにしてLockedにするのが基本。
-            // ※より精密な「Activateボタンを押した時」の挙動（Offsetの自動ベイク）は、場合によっては transform.rotation に基づく計算が必要。
-            // 簡易的に EditorUtility的な動作としてはこれでLock時に維持される。
         }
 
         private void SetupBaseConstraint(Transform prostheticBone, Transform avatarBone, bool enablePosition)
@@ -141,6 +143,14 @@ namespace Tiloop.ConstraintLinkSetupTool.Core.Services
 
                 pConstraint.translationAtRest = prostheticBone.localPosition;
                 pConstraint.rotationAtRest = prostheticBone.localEulerAngles;
+                
+                // 現在の姿勢からターゲットとの差分(Offset)を計算して保持
+                Vector3 offsetPos = avatarBone.InverseTransformPoint(prostheticBone.position);
+                Quaternion offsetRot = Quaternion.Inverse(avatarBone.rotation) * prostheticBone.rotation;
+                
+                pConstraint.SetTranslationOffset(0, offsetPos);
+                pConstraint.SetRotationOffset(0, offsetRot.eulerAngles);
+
                 pConstraint.locked = true;
                 pConstraint.constraintActive = true;
             }

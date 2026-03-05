@@ -1,5 +1,8 @@
 using System;
 using System.Collections.Generic;
+using System.IO;
+using System.Linq;
+using System.Text;
 using UnityEngine;
 using Tiloop.ConstraintLinkSetupTool.Core.Models;
 using Tiloop.ConstraintLinkSetupTool.Core.Services.Interfaces;
@@ -8,15 +11,30 @@ namespace Tiloop.ConstraintLinkSetupTool.Core.Services
 {
     public class BoneMappingService : IBoneMappingService
     {
-        public List<BonePair> MatchBones(Transform avatarBaseBone, Transform prostheticBaseBone, SideMode sideMode)
+        /// <summary>
+        /// デバッグモード: 有効時にマッピング結果をLog/に保存
+        /// </summary>
+        public bool DebugMode { get; set; } = false;
+
+        /// <summary>
+        /// グローバル探索によるボーンマッチング
+        /// </summary>
+        public List<BonePair> MatchBones(
+            Transform avatarRoot, Transform prostheticRoot,
+            Transform avatarBaseBone, Transform prostheticBaseBone,
+            SideMode sideMode)
         {
             var bonePairs = new List<BonePair>();
-            if (avatarBaseBone == null || prostheticBaseBone == null)
+            var debugLog = DebugMode ? new StringBuilder() : null;
+
+            if (avatarRoot == null || prostheticRoot == null ||
+                avatarBaseBone == null || prostheticBaseBone == null)
             {
                 return bonePairs;
             }
 
-            bool isRightSide = true; // デフォルト
+            // --- 左右判定 ---
+            bool isRightSide = true;
             if (sideMode == SideMode.Auto)
             {
                 isRightSide = DetectSide(avatarBaseBone);
@@ -27,18 +45,211 @@ namespace Tiloop.ConstraintLinkSetupTool.Core.Services
                 isRightSide = (sideMode == SideMode.Right);
             }
 
-            // ベースボーンをペアとして登録
-            bonePairs.Add(new BonePair(avatarBaseBone, prostheticBaseBone, isBaseBone: true));
+            debugLog?.AppendLine("=== Constraint Link Mapping Debug Log ===");
+            debugLog?.AppendLine($"Date: {DateTime.Now:yyyy-MM-dd HH:mm:ss}");
+            debugLog?.AppendLine($"Avatar Root: {avatarRoot.name}");
+            debugLog?.AppendLine($"Prosthetic Root: {prostheticRoot.name}");
+            debugLog?.AppendLine($"Avatar Base Bone: {avatarBaseBone.name}");
+            debugLog?.AppendLine($"Prosthetic Base Bone: {prostheticBaseBone.name}");
+            debugLog?.AppendLine($"Side Mode: {sideMode} → Detected: {(isRightSide ? "Right" : "Left")}");
+            debugLog?.AppendLine();
 
-            // 再帰的に子ボーンを対応付け
-            MapChildrenRecursive(avatarBaseBone, prostheticBaseBone, bonePairs, isRightSide);
+            // --- Step 1: ベースボーン同士をアンカーとしてペアリング ---
+            bonePairs.Add(new BonePair(avatarBaseBone, prostheticBaseBone, isBaseBone: true));
+            debugLog?.AppendLine($"[BASE] {prostheticBaseBone.name} ↔ {avatarBaseBone.name} (anchor)");
+
+            // --- Step 2: アバター側の全ボーンをフラット化してキャッシュ ---
+            var avatarAllBones = avatarRoot.GetComponentsInChildren<Transform>(true);
+
+            var avatarBoneByHumanBone = new Dictionary<HumanBodyBones, Transform>();
+            var avatarBoneByNormalizedName = new Dictionary<string, List<Transform>>();
+
+            foreach (var bone in avatarAllBones)
+            {
+                var humanBone = BoneNameMatcher.TryMatchBone(bone.name);
+                if (humanBone.HasValue && !avatarBoneByHumanBone.ContainsKey(humanBone.Value))
+                {
+                    int boneSide = BoneNameMatcher.GetSideIndicator(bone.name);
+                    if (boneSide == 0 || (boneSide > 0 == isRightSide))
+                    {
+                        avatarBoneByHumanBone[humanBone.Value] = bone;
+                    }
+                }
+
+                var normalized = BoneNameMatcher.NormalizeBoneName(bone.name);
+                if (!string.IsNullOrEmpty(normalized))
+                {
+                    if (!avatarBoneByNormalizedName.TryGetValue(normalized, out var list))
+                    {
+                        list = new List<Transform>();
+                        avatarBoneByNormalizedName[normalized] = list;
+                    }
+                    list.Add(bone);
+                }
+            }
+
+            debugLog?.AppendLine();
+            debugLog?.AppendLine($"--- Avatar Bone Cache: {avatarBoneByHumanBone.Count} HumanBone entries, {avatarBoneByNormalizedName.Count} normalized name entries ---");
+            debugLog?.AppendLine();
+            debugLog?.AppendLine("=== Matching Results ===");
+
+            // --- Step 3: 義手側のベースボーン以下のみを走査してグローバルマッチング ---
+            // ※義手自体のHipsやSpineといった、アンカーより上位の構造ボーンやMeshを除外するため
+            var prostheticAllBones = prostheticBaseBone.GetComponentsInChildren<Transform>(true);
+            var matchedAvatarBones = new HashSet<Transform>();
+            matchedAvatarBones.Add(avatarBaseBone);
+
+            var prostheticToAvatarMap = new Dictionary<Transform, Transform>();
+            prostheticToAvatarMap[prostheticBaseBone] = avatarBaseBone;
+
+            var unmatchedProsthetics = new List<Transform>();
+            int nameMatchCount = 0;
+
+            foreach (var pBone in prostheticAllBones)
+            {
+                if (pBone == prostheticBaseBone)
+                    continue;
+
+                Transform matched = null;
+                string matchMethod = "NONE";
+
+                // --- 3a: HumanBodyBones 辞書による高精度マッチング ---
+                var pHumanBone = BoneNameMatcher.TryMatchBone(pBone.name);
+                if (pHumanBone.HasValue)
+                {
+                    if (avatarBoneByHumanBone.TryGetValue(pHumanBone.Value, out var avatarBone)
+                        && !matchedAvatarBones.Contains(avatarBone))
+                    {
+                        matched = avatarBone;
+                        matchMethod = $"DICT({pHumanBone.Value})";
+                    }
+                }
+
+                // --- 3b: 正規化名による直接マッチング ---
+                if (matched == null)
+                {
+                    var pNormalized = BoneNameMatcher.NormalizeBoneName(pBone.name);
+                    if (!string.IsNullOrEmpty(pNormalized) &&
+                        avatarBoneByNormalizedName.TryGetValue(pNormalized, out var candidates))
+                    {
+                        foreach (var candidate in candidates)
+                        {
+                            if (matchedAvatarBones.Contains(candidate))
+                                continue;
+
+                            int candidateSide = BoneNameMatcher.GetSideIndicator(candidate.name);
+                            if (candidateSide == 0 || (candidateSide > 0 == isRightSide))
+                            {
+                                matched = candidate;
+                                matchMethod = $"NAME({pNormalized})";
+                                break;
+                            }
+                        }
+                    }
+                }
+
+                if (matched != null)
+                {
+                    bonePairs.Add(new BonePair(matched, pBone, isBaseBone: false));
+                    matchedAvatarBones.Add(matched);
+                    prostheticToAvatarMap[pBone] = matched;
+                    nameMatchCount++;
+
+                    debugLog?.AppendLine($"  [OK  ] {pBone.name,-35} ↔ {matched.name,-35} method={matchMethod}");
+                }
+                else
+                {
+                    unmatchedProsthetics.Add(pBone);
+                    var pNorm = BoneNameMatcher.NormalizeBoneName(pBone.name);
+                    var pHuman = pHumanBone.HasValue ? pHumanBone.Value.ToString() : "none";
+                    debugLog?.AppendLine($"  [MISS] {pBone.name,-35} normalized=\"{pNorm}\" humanBone={pHuman}");
+                }
+            }
+
+            // --- Step 4: フォールバック (階層ベース) ---
+            debugLog?.AppendLine();
+            debugLog?.AppendLine("=== Fallback (Hierarchy-based) ===");
+            int fallbackMatchCount = 0;
+
+            foreach (var pBone in unmatchedProsthetics)
+            {
+                if (pBone.parent == null)
+                    continue;
+
+                if (prostheticToAvatarMap.TryGetValue(pBone.parent, out var avatarParent))
+                {
+                    int myIndex = GetChildIndex(pBone);
+
+                    if (myIndex >= 0 && myIndex < avatarParent.childCount)
+                    {
+                        var avatarChild = avatarParent.GetChild(myIndex);
+                        if (!matchedAvatarBones.Contains(avatarChild))
+                        {
+                            int childSide = BoneNameMatcher.GetSideIndicator(avatarChild.name);
+                            if (childSide == 0 || (childSide > 0 == isRightSide))
+                            {
+                                bonePairs.Add(new BonePair(avatarChild, pBone, isBaseBone: false));
+                                matchedAvatarBones.Add(avatarChild);
+                                prostheticToAvatarMap[pBone] = avatarChild;
+                                fallbackMatchCount++;
+
+                                debugLog?.AppendLine($"  [FALL] {pBone.name,-35} ↔ {avatarChild.name,-35} parentIdx={myIndex}");
+                            }
+                        }
+                    }
+                }
+            }
+
+            // --- Summary ---
+            debugLog?.AppendLine();
+            debugLog?.AppendLine("=== Summary ===");
+            debugLog?.AppendLine($"Total Pairs: {bonePairs.Count}");
+            debugLog?.AppendLine($"  Name-based: {nameMatchCount}");
+            debugLog?.AppendLine($"  Fallback:   {fallbackMatchCount}");
+            debugLog?.AppendLine($"  Unmatched:  {unmatchedProsthetics.Count - fallbackMatchCount}");
+            debugLog?.AppendLine($"  Base Bone:  1");
+
+            Debug.Log($"[ConstraintLink] Matched {bonePairs.Count} bone pairs (Name: {nameMatchCount}, Fallback: {fallbackMatchCount})");
+
+            // --- Write debug log to file ---
+            if (DebugMode && debugLog != null)
+            {
+                WriteDebugLog(debugLog.ToString());
+            }
 
             return bonePairs;
         }
 
+        /// <summary>
+        /// デバッグログをLog/ディレクトリに書き出す
+        /// </summary>
+        private void WriteDebugLog(string content)
+        {
+            try
+            {
+                string logDir = Path.Combine(
+                    Application.dataPath,
+                    "Editor/ConstraintLinkSetupTool/Log");
+
+                if (!Directory.Exists(logDir))
+                {
+                    Directory.CreateDirectory(logDir);
+                }
+
+                string fileName = $"mapping_{DateTime.Now:yyyyMMdd_HHmmss}.txt";
+                string filePath = Path.Combine(logDir, fileName);
+
+                File.WriteAllText(filePath, content, Encoding.UTF8);
+                Debug.Log($"[ConstraintLink] Debug log saved: {filePath}");
+            }
+            catch (Exception e)
+            {
+                Debug.LogWarning($"[ConstraintLink] Failed to write debug log: {e.Message}");
+            }
+        }
+
         private bool DetectSide(Transform baseBone)
         {
-            // 1. ボーン名（およびその直接の親や子）からの判定
             int indicator = BoneNameMatcher.GetSideIndicator(baseBone.name);
             if (indicator != 0) return indicator > 0;
 
@@ -54,65 +265,24 @@ namespace Tiloop.ConstraintLinkSetupTool.Core.Services
                 if (indicator != 0) return indicator > 0;
             }
 
-            // 2. 空間座標（X位置）による判定 (フォールバック)
-            // 原点(ルート)から見てどちらにあるか。通常はUnityでは右腕がXマイナス側、左腕がXプラス側ですが
-            // アバターによってローカル原点が異なる可能性があるため、ルートの Transform を基準とした LocalPosition のXを確認します。
             Transform root = baseBone.root;
             Vector3 relativePos = root.InverseTransformPoint(baseBone.position);
             
-            // 標準的な T-Pose や A-Pose では Right は X < 0、Left は X > 0 にいることが多い
-            if (relativePos.x < -0.01f) return true; // Right
-            if (relativePos.x > 0.01f) return false; // Left
+            if (relativePos.x < -0.01f) return true;
+            if (relativePos.x > 0.01f) return false;
 
-            // 全てダメならデフォルト(右)
             return true;
         }
 
-        private void MapChildrenRecursive(Transform avatarBone, Transform prostheticBone, List<BonePair> bonePairs, bool isRightSideTarget)
+        private int GetChildIndex(Transform child)
         {
-            // プロステティック側（義手側）の子ボーンをベースに処理
-            for (int i = 0; i < prostheticBone.childCount; i++)
+            if (child.parent == null) return -1;
+            for (int i = 0; i < child.parent.childCount; i++)
             {
-                Transform prostheticChild = prostheticBone.GetChild(i);
-                Transform matchedAvatarChild = null;
-
-                // 1. 名前ベースの推測: BoneNameMatcher による推測を優先利用
-                for (int j = 0; j < avatarBone.childCount; j++)
-                {
-                    Transform avatarChild = avatarBone.GetChild(j);
-                    
-                    // 名前のマッチング
-                    if (BoneNameMatcher.TryMatchBone(avatarChild.name, prostheticChild.name))
-                    {
-                        // 左右の判定を追加: 対象サイドと同じサイドか、中央系のボーンであれば許可
-                        int childSide = BoneNameMatcher.GetSideIndicator(avatarChild.name);
-                        
-                        // 判定不能(0) または 指定サイドと一致する場合のみ採用 (逆サイドを拾うのを防ぐ)
-                        if (childSide == 0 || (childSide > 0 == isRightSideTarget))
-                        {
-                            matchedAvatarChild = avatarChild;
-                            break;
-                        }
-                    }
-                }
-
-                // 2. 階層ベースの推測: 該当する名前が見つからなければ、インデックスで一致を試みる
-                if (matchedAvatarChild == null)
-                {
-                    if (i < avatarBone.childCount)
-                    {
-                        matchedAvatarChild = avatarBone.GetChild(i);
-                    }
-                }
-
-                if (matchedAvatarChild != null)
-                {
-                    bonePairs.Add(new BonePair(matchedAvatarChild, prostheticChild, isBaseBone: false));
-                    
-                    // 更に深く走査
-                    MapChildrenRecursive(matchedAvatarChild, prostheticChild, bonePairs, isRightSideTarget);
-                }
+                if (child.parent.GetChild(i) == child) return i;
             }
+            return -1;
         }
     }
 }
+

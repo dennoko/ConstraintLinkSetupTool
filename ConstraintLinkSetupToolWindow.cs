@@ -60,6 +60,7 @@ namespace Tiloop.ConstraintLinkSetupTool.UI
 
         private Vector2 _scrollPos;
         private bool _showAdvancedSettings = false;
+        private bool _debugMode = false;
 
         // UI Styles
         private GUIStyle _headerStyle;
@@ -160,7 +161,6 @@ namespace Tiloop.ConstraintLinkSetupTool.UI
             EditorGUILayout.Space(5);
 
             DrawStep1BaseBoneSetup();
-            _config.UpdateRootsFromBaseBones();
             DrawStep2AutoMapping();
             DrawStep3Execute();
         }
@@ -199,6 +199,10 @@ namespace Tiloop.ConstraintLinkSetupTool.UI
                 _config.PartSideMode = (SideMode)EditorGUILayout.Popup(_texts.SideMode, (int)_config.PartSideMode, sideOptions);
                 
                 EditorGUILayout.Space(5);
+                
+                _debugMode = EditorGUILayout.ToggleLeft("Debug Mode (Log/)", _debugMode, EditorStyles.miniLabel);
+                
+                EditorGUILayout.Space(5);
                 EditorGUILayout.EndVertical();
                 EditorGUI.indentLevel--;
             }
@@ -218,7 +222,11 @@ namespace Tiloop.ConstraintLinkSetupTool.UI
             {
                 if (_config.TargetAvatarBaseBone != null && _config.TargetProstheticBaseBone != null)
                 {
-                    _bonePairs = _mappingService.MatchBones(_config.TargetAvatarBaseBone, _config.TargetProstheticBaseBone, _config.PartSideMode);
+                    _mappingService.DebugMode = _debugMode;
+                    _bonePairs = _mappingService.MatchBones(
+                        _config.TargetAvatarRoot, _config.TargetProstheticRoot,
+                        _config.TargetAvatarBaseBone, _config.TargetProstheticBaseBone,
+                        _config.PartSideMode);
                 }
                 else
                 {

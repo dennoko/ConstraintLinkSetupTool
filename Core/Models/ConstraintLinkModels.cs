@@ -15,29 +15,84 @@ namespace Tiloop.ConstraintLinkSetupTool.Core.Models
     /// </summary>
     public class SetupConfig
     {
-        public Transform AvatarRoot;
-        public Transform ProstheticRoot;
         public Transform TargetAvatarBaseBone; // (例：アバター側の右肩)
         public Transform TargetProstheticBaseBone; // (例：義手側の右肩にあたる部分)
 
         public SideMode PartSideMode = SideMode.Auto;
         public bool EnablePositionConstraint = true;
 
-        public bool IsValid()
+        /// <summary>
+        /// アバター側のベースボーンからルートを自動取得
+        /// </summary>
+        public Transform TargetAvatarRoot
         {
-            return AvatarRoot != null && ProstheticRoot != null && TargetAvatarBaseBone != null && TargetProstheticBaseBone != null;
+            get { return TargetAvatarBaseBone != null ? TargetAvatarBaseBone.root : null; }
         }
 
-        public void UpdateRootsFromBaseBones()
+        /// <summary>
+        /// 義手側のルートを自動取得
+        /// 義手がすでにアバターの子として配置されている場合は、
+        /// 義手のベースボーンとアバターのベースボーンの共通祖先を検出し、
+        /// 義手側の独立したルートを返す
+        /// </summary>
+        public Transform TargetProstheticRoot
         {
-            if (TargetAvatarBaseBone != null && AvatarRoot == null)
+            get
             {
-                AvatarRoot = TargetAvatarBaseBone.root;
+                if (TargetProstheticBaseBone == null) return null;
+                
+                // アバターのルートと異なれば、そのまま .root を返す（別のオブジェクト）
+                Transform pRoot = TargetProstheticBaseBone.root;
+                Transform aRoot = TargetAvatarRoot;
+                
+                if (aRoot == null || pRoot != aRoot)
+                {
+                    return pRoot;
+                }
+                
+                // 義手がアバターの子として配置されている場合:
+                // 義手のベースボーンから上に辿り、アバターのベースボーンの階層に含まれない
+                // 最も上位のTransformを義手のルートとする
+                return FindProstheticRoot(TargetProstheticBaseBone, TargetAvatarBaseBone);
             }
-            if (TargetProstheticBaseBone != null && ProstheticRoot == null)
+        }
+
+        /// <summary>
+        /// 義手のベースボーンから上に辿り、アバター側の階層から分岐する点を見つける
+        /// </summary>
+        private Transform FindProstheticRoot(Transform prostheticBone, Transform avatarBone)
+        {
+            // アバター側のベースボーンからルートまでの全祖先を収集
+            var avatarAncestors = new HashSet<Transform>();
+            Transform current = avatarBone;
+            while (current != null)
             {
-                ProstheticRoot = TargetProstheticBaseBone.root;
+                avatarAncestors.Add(current);
+                current = current.parent;
             }
+
+            // 義手のベースボーンから上に辿り、アバターの祖先に含まれる親に到達したら
+            // その一つ前（含まれていない最上位）が義手の独立ルート
+            Transform prostheticRoot = prostheticBone;
+            current = prostheticBone;
+            while (current.parent != null)
+            {
+                if (avatarAncestors.Contains(current.parent))
+                {
+                    // current.parentはアバター側の階層なので、currentが義手の独立ルート
+                    return current;
+                }
+                current = current.parent;
+                prostheticRoot = current;
+            }
+            
+            // 見つからなかった場合（通常ありえないが）、ベースボーン自体を返す
+            return prostheticRoot;
+        }
+
+        public bool IsValid()
+        {
+            return TargetAvatarRoot != null && TargetProstheticRoot != null && TargetAvatarBaseBone != null && TargetProstheticBaseBone != null;
         }
     }
 
