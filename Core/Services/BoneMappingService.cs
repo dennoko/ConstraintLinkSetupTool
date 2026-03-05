@@ -97,19 +97,14 @@ namespace Tiloop.ConstraintLinkSetupTool.Core.Services
             // ※義手自体のHipsやSpineといった、アンカーより上位の構造ボーンやMeshを除外するため
             var prostheticAllBones = prostheticBaseBone.GetComponentsInChildren<Transform>(true);
             var matchedAvatarBones = new HashSet<Transform>();
-            matchedAvatarBones.Add(avatarBaseBone);
 
             var prostheticToAvatarMap = new Dictionary<Transform, Transform>();
-            prostheticToAvatarMap[prostheticBaseBone] = avatarBaseBone;
 
             var unmatchedProsthetics = new List<Transform>();
             int nameMatchCount = 0;
 
             foreach (var pBone in prostheticAllBones)
             {
-                if (pBone == prostheticBaseBone)
-                    continue;
-
                 Transform matched = null;
                 string matchMethod = "NONE";
 

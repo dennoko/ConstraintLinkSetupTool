@@ -2,6 +2,7 @@ using System.Collections.Generic;
 using UnityEditor;
 using UnityEngine;
 using UnityEngine.Animations;
+using nadena.dev.modular_avatar.core;
 using Tiloop.ConstraintLinkSetupTool.Core.Models;
 using Tiloop.ConstraintLinkSetupTool.Core.Services.Interfaces;
 
@@ -18,28 +19,18 @@ namespace Tiloop.ConstraintLinkSetupTool.Core.Services
             if (config.TargetProstheticRoot.parent != config.TargetAvatarRoot)
             {
                 Undo.SetTransformParent(config.TargetProstheticRoot, config.TargetAvatarRoot, "Reparent Prosthetic");
-                // 配置（座標）自体はユーザーが既に行った前提とする
             }
+
+            // 2. 義手のルートに MA Bone Proxy を設定（アバター側の指定ベースボーンをアンカーとする）
+            SetupMABoneProxy(config.TargetProstheticRoot, config.TargetAvatarBaseBone);
 
             foreach (var pair in bonePairs)
             {
                 if (!pair.ApplyConstraint || pair.AvatarBone == null || pair.ProstheticBone == null)
                     continue;
 
-                // 2 & 4. 義手の対象ボーンから既存のコンストレイントを取り除くなどの初期化処理
-                // ここでは必要に応じて重複追加の防止をチェックする。
-
-                if (pair.IsBaseBone)
-                {
-                    // ベースボーン：義手全体の追従にParentConstraintなどを使用
-                    // アバターのターゲットボーン（例：右肩）に対して、義手の原点を追従させる。
-                    SetupBaseConstraint(pair.ProstheticBone, pair.AvatarBone, config.EnablePositionConstraint);
-                }
-                else
-                {
-                    // 子ボーン：Rotation Constraint で回転のみ同期
-                    SetupRotationConstraint(pair.ProstheticBone, pair.AvatarBone);
-                }
+                // 全てのボーン（ベースボーン含む）に対して Rotation Constraint で回転のみ同期
+                SetupRotationConstraint(pair.ProstheticBone, pair.AvatarBone);
             }
         }
 
@@ -47,7 +38,6 @@ namespace Tiloop.ConstraintLinkSetupTool.Core.Services
         {
             if (bonePairs == null) return;
             
-            // Undoに対応できるようにするため、基本的にDestroyImmediateではなくUndoオブジェクトを使用するのがEditor的（簡易的には以下）
             foreach (var pair in bonePairs)
             {
                 if (pair.ProstheticBone == null) continue;
@@ -64,15 +54,36 @@ namespace Tiloop.ConstraintLinkSetupTool.Core.Services
                     Undo.DestroyObjectImmediate(posConstraint);
                 }
 
-                if (pair.IsBaseBone)
+                var parentConstraint = pair.ProstheticBone.GetComponent<ParentConstraint>();
+                if (parentConstraint != null)
                 {
-                    var parentConstraint = pair.ProstheticBone.GetComponent<ParentConstraint>();
-                    if (parentConstraint != null)
-                    {
-                        Undo.DestroyObjectImmediate(parentConstraint);
-                    }
+                    Undo.DestroyObjectImmediate(parentConstraint);
                 }
             }
+
+            // MA Bone Proxy の削除
+            if (config != null && config.TargetProstheticRoot != null)
+            {
+                var proxy = config.TargetProstheticRoot.GetComponent<ModularAvatarBoneProxy>();
+                if (proxy != null)
+                {
+                    Undo.DestroyObjectImmediate(proxy);
+                }
+            }
+        }
+
+        private void SetupMABoneProxy(Transform root, Transform anchor)
+        {
+            var proxy = root.GetComponent<ModularAvatarBoneProxy>();
+            if (proxy == null)
+            {
+                proxy = Undo.AddComponent<ModularAvatarBoneProxy>(root.gameObject);
+            }
+
+            proxy.target = anchor;
+            proxy.attachmentMode = BoneProxyAttachmentMode.AsChildKeepWorldPose;
+            
+            EditorUtility.SetDirty(proxy);
         }
 
         private void SetupRotationConstraint(Transform prostheticBone, Transform avatarScaleBone)
@@ -114,52 +125,6 @@ namespace Tiloop.ConstraintLinkSetupTool.Core.Services
             // Active ＆ Lock処理
             rotConstraint.locked = true;
             rotConstraint.constraintActive = true;
-        }
-
-        private void SetupBaseConstraint(Transform prostheticBone, Transform avatarBone, bool enablePosition)
-        {
-            if (enablePosition)
-            {
-                // 位置も回転も同期（従来の Parent Constraint 相当、または Position + Rotation 両方がけ）
-                // VRChatのSDK3環境では ParentConstraint をそのまま使うのが一般的ですが、
-                // 細かい制御のために Position と Rotation を分けることもあります。今回は Parent Constraint を使用
-                var pConstraint = prostheticBone.GetComponent<ParentConstraint>();
-                if (pConstraint == null)
-                {
-                    pConstraint = Undo.AddComponent<ParentConstraint>(prostheticBone.gameObject);
-                }
-
-                ConstraintSource source = new ConstraintSource
-                {
-                    sourceTransform = avatarBone,
-                    weight = 1.0f
-                };
-
-                for (int i = pConstraint.sourceCount - 1; i >= 0; i--)
-                {
-                    pConstraint.RemoveSource(i);
-                }
-                pConstraint.AddSource(source);
-
-                pConstraint.translationAtRest = prostheticBone.localPosition;
-                pConstraint.rotationAtRest = prostheticBone.localEulerAngles;
-                
-                // 現在の姿勢からターゲットとの差分(Offset)を計算して保持
-                Vector3 offsetPos = avatarBone.InverseTransformPoint(prostheticBone.position);
-                Quaternion offsetRot = Quaternion.Inverse(avatarBone.rotation) * prostheticBone.rotation;
-                
-                pConstraint.SetTranslationOffset(0, offsetPos);
-                pConstraint.SetRotationOffset(0, offsetRot.eulerAngles);
-
-                pConstraint.locked = true;
-                pConstraint.constraintActive = true;
-            }
-            else
-            {
-                // 回転のみ同期 (Rotation Constraint のみ) 
-                // Position は動かさず、指定された位置を維持する
-                SetupRotationConstraint(prostheticBone, avatarBone);
-            }
         }
     }
 }
