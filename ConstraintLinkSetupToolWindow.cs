@@ -181,11 +181,7 @@ namespace Tiloop.ConstraintLinkSetupTool.UI
             EditorGUILayout.LabelField(_texts.ProstheticBaseBone, EditorStyles.boldLabel, GUILayout.Height(30));
             _config.TargetProstheticBaseBone = (Transform)EditorGUILayout.ObjectField(_config.TargetProstheticBaseBone, typeof(Transform), true);
 
-            EditorGUILayout.Space(10);
-            
-            _config.EnablePositionConstraint = EditorGUILayout.ToggleLeft(_texts.EnablePosition, _config.EnablePositionConstraint, EditorStyles.boldLabel);
-            
-            EditorGUILayout.Space(10);
+            EditorGUILayout.Space(5);
             
             // Advanced Settings Foldout
             _showAdvancedSettings = EditorGUILayout.Foldout(_showAdvancedSettings, _texts.AdvancedFoldout, true, EditorStyles.foldoutHeader);

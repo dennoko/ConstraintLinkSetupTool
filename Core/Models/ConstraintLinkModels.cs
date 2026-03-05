@@ -19,7 +19,6 @@ namespace Tiloop.ConstraintLinkSetupTool.Core.Models
         public Transform TargetProstheticBaseBone; // (例：義手側の右肩にあたる部分)
 
         public SideMode PartSideMode = SideMode.Auto;
-        public bool EnablePositionConstraint = true;
 
         /// <summary>
         /// アバター側のベースボーンからルートを自動取得
