@@ -15,10 +15,10 @@ namespace Tiloop.ConstraintLinkSetupTool.UI
         public string Language;
         public string Step1Title;
         public string Step1Desc;
-        public string TargetAvatarRoot;
-        public string ProstheticPartRoot;
         public string Step2Title;
         public string Step2Desc;
+        public string Step3Title;
+        
         public string AvatarBaseBone;
         public string ProstheticBaseBone;
         
@@ -28,9 +28,6 @@ namespace Tiloop.ConstraintLinkSetupTool.UI
         public string SideRight;
         public string SideLeft;
         
-        public string EnablePosition;
-        public string Step3Title;
-        public string GuessMappingBtn;
         public string MappingPreview;
         public string ColUse;
         public string ColAvatarBone;
@@ -44,7 +41,6 @@ namespace Tiloop.ConstraintLinkSetupTool.UI
         public string BtnCancel;
         public string CompleteMsg;
         public string RemovedMsg;
-        public string Step4Title;
         public string ExecuteBtn;
         public string RevertBtn;
         public string ToggleEn;
@@ -160,16 +156,38 @@ namespace Tiloop.ConstraintLinkSetupTool.UI
 
             EditorGUILayout.Space(5);
 
+            EditorGUI.BeginChangeCheck();
             DrawStep1BaseBoneSetup();
+            if (EditorGUI.EndChangeCheck())
+            {
+                UpdateAutoMapping();
+            }
+
             DrawStep2AutoMapping();
             DrawStep3Execute();
+        }
+
+        private void UpdateAutoMapping()
+        {
+            if (_config.TargetAvatarBaseBone != null && _config.TargetProstheticBaseBone != null)
+            {
+                _mappingService.DebugMode = _debugMode;
+                _bonePairs = _mappingService.MatchBones(
+                    _config.TargetAvatarRoot, _config.TargetProstheticRoot,
+                    _config.TargetAvatarBaseBone, _config.TargetProstheticBaseBone,
+                    _config.PartSideMode);
+            }
+            else
+            {
+                if (_bonePairs != null) _bonePairs.Clear();
+            }
         }
 
         private void DrawStep1BaseBoneSetup()
         {
             EditorGUILayout.BeginVertical(_stepBoxStyle);
-            GUILayout.Label(_texts.Step2Title.Replace("Step 2", "Step 1"), _stepTitleStyle); // Jsonのテキストを一時的に置換
-            EditorGUILayout.HelpBox(_texts.Step2Desc, MessageType.Info);
+            GUILayout.Label(_texts.Step1Title, _stepTitleStyle);
+            EditorGUILayout.HelpBox(_texts.Step1Desc, MessageType.Info);
 
             EditorGUILayout.Space(5);
 
@@ -209,27 +227,9 @@ namespace Tiloop.ConstraintLinkSetupTool.UI
         private void DrawStep2AutoMapping()
         {
             EditorGUILayout.BeginVertical(_stepBoxStyle);
-            GUILayout.Label(_texts.Step3Title.Replace("Step 3", "Step 2"), _stepTitleStyle);
+            GUILayout.Label(_texts.Step2Title, _stepTitleStyle);
+            EditorGUILayout.HelpBox(_texts.Step2Desc, MessageType.Info);
 
-            EditorGUILayout.Space(5);
-
-            GUI.backgroundColor = new Color(0.2f, 0.6f, 1.0f); // Button Color Highlight
-            if (GUILayout.Button(_texts.GuessMappingBtn, GUILayout.Height(35)))
-            {
-                if (_config.TargetAvatarBaseBone != null && _config.TargetProstheticBaseBone != null)
-                {
-                    _mappingService.DebugMode = _debugMode;
-                    _bonePairs = _mappingService.MatchBones(
-                        _config.TargetAvatarRoot, _config.TargetProstheticRoot,
-                        _config.TargetAvatarBaseBone, _config.TargetProstheticBaseBone,
-                        _config.PartSideMode);
-                }
-                else
-                {
-                    EditorUtility.DisplayDialog("Error", _texts.ErrorNoBaseBone, "OK");
-                }
-            }
-            GUI.backgroundColor = Color.white; // Reset Color
 
             EditorGUILayout.Space(10);
             GUILayout.Label(_texts.MappingPreview, EditorStyles.boldLabel);
@@ -287,7 +287,7 @@ namespace Tiloop.ConstraintLinkSetupTool.UI
         private void DrawStep3Execute()
         {
             EditorGUILayout.BeginVertical(_stepBoxStyle);
-            GUILayout.Label(_texts.Step4Title.Replace("Step 4", "Step 3"), _stepTitleStyle);
+            GUILayout.Label(_texts.Step3Title, _stepTitleStyle);
 
             EditorGUILayout.Space(5);
 
