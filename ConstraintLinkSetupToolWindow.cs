@@ -21,6 +21,10 @@ namespace Tiloop.ConstraintLinkSetupTool.UI
         
         public string AvatarBaseBone;
         public string ProstheticBaseBone;
+        public string AvatarBaseBoneOptional;
+        public string UseManualAvatarBaseBone;
+        public string AutoDetectedAvatarBaseBone;
+        public string ErrorAutoResolveAvatarBaseBone;
         
         public string AdvancedFoldout;
         public string SideMode;
@@ -191,13 +195,31 @@ namespace Tiloop.ConstraintLinkSetupTool.UI
 
             EditorGUILayout.Space(5);
 
-            EditorGUILayout.LabelField(_texts.AvatarBaseBone, EditorStyles.boldLabel, GUILayout.Height(30));
-            _config.TargetAvatarBaseBone = (Transform)EditorGUILayout.ObjectField(_config.TargetAvatarBaseBone, typeof(Transform), true);
-
-            EditorGUILayout.Space(5);
-
             EditorGUILayout.LabelField(_texts.ProstheticBaseBone, EditorStyles.boldLabel, GUILayout.Height(30));
             _config.TargetProstheticBaseBone = (Transform)EditorGUILayout.ObjectField(_config.TargetProstheticBaseBone, typeof(Transform), true);
+
+            EditorGUILayout.Space(8);
+
+            EditorGUILayout.LabelField(_texts.AvatarBaseBoneOptional ?? _texts.AvatarBaseBone, EditorStyles.boldLabel, GUILayout.Height(30));
+            _config.UseManualAvatarBaseBone = EditorGUILayout.ToggleLeft(
+                _texts.UseManualAvatarBaseBone ?? "Use Manual Avatar Base Bone",
+                _config.UseManualAvatarBaseBone);
+
+            if (_config.UseManualAvatarBaseBone)
+            {
+                _config.ManualAvatarBaseBone = (Transform)EditorGUILayout.ObjectField(_config.ManualAvatarBaseBone, typeof(Transform), true);
+            }
+
+            EditorGUILayout.Space(4);
+            EditorGUILayout.LabelField(_texts.AutoDetectedAvatarBaseBone ?? "Resolved Avatar Base Bone", EditorStyles.miniBoldLabel);
+            EditorGUI.BeginDisabledGroup(true);
+            EditorGUILayout.ObjectField(_config.TargetAvatarBaseBone, typeof(Transform), true);
+            EditorGUI.EndDisabledGroup();
+
+            if (_config.TargetProstheticBaseBone != null && _config.TargetAvatarBaseBone == null)
+            {
+                EditorGUILayout.HelpBox(_texts.ErrorAutoResolveAvatarBaseBone ?? _texts.ErrorNoBaseBone, MessageType.Warning);
+            }
 
             EditorGUILayout.Space(5);
             

@@ -15,8 +15,36 @@ namespace Tiloop.ConstraintLinkSetupTool.Core.Models
     /// </summary>
     public class SetupConfig
     {
-        public Transform TargetAvatarBaseBone; // (例：アバター側の右肩)
+        public Transform ManualAvatarBaseBone; // 任意指定（未指定時は自動解決）
         public Transform TargetProstheticBaseBone; // (例：義手側の右肩にあたる部分)
+
+        public bool UseManualAvatarBaseBone = false;
+
+        /// <summary>
+        /// 実際に使用するアバター側ベースボーン
+        /// - 手動指定が有効かつ設定済み: 手動値
+        /// - それ以外: 義手側ベースボーンの親を自動使用
+        /// </summary>
+        public Transform TargetAvatarBaseBone
+        {
+            get
+            {
+                if (UseManualAvatarBaseBone && ManualAvatarBaseBone != null)
+                {
+                    return ManualAvatarBaseBone;
+                }
+
+                return AutoDetectedAvatarBaseBone;
+            }
+        }
+
+        /// <summary>
+        /// 自動検出されたアバター側ベースボーン（義手側ベースボーンの親）
+        /// </summary>
+        public Transform AutoDetectedAvatarBaseBone
+        {
+            get { return TargetProstheticBaseBone != null ? TargetProstheticBaseBone.parent : null; }
+        }
 
         public SideMode PartSideMode = SideMode.Auto;
 
