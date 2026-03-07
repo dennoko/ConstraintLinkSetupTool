@@ -15,7 +15,8 @@ namespace Tiloop.ConstraintLinkSetupTool.UI
         private BoneMappingService _mappingService;
         private ConstraintSetupService _setupService;
 
-        private Vector2 _scrollPos;
+        private Vector2 _outerScrollPos;
+        private Vector2 _mappingScrollPos;
         private bool _showAdvancedSettings = false;
         private bool _debugMode = false;
         private bool _constraintsApplied = false;
@@ -24,7 +25,6 @@ namespace Tiloop.ConstraintLinkSetupTool.UI
         private GUIStyle _headerStyle;
         private GUIStyle _stepBoxStyle;
         private GUIStyle _stepTitleStyle;
-        private GUIStyle _boldHelpBoxStyle;
 
         // Localization
         private const string LangRelativePath = "Editor/ConstraintLinkSetupTool/Docs/Lang";
@@ -35,7 +35,7 @@ namespace Tiloop.ConstraintLinkSetupTool.UI
         public static void ShowWindow()
         {
             var window = GetWindow<ConstraintLinkSetupToolWindow>("Constraint Link Setup Tool");
-            window.minSize = new Vector2(400, 600);
+            window.minSize = new Vector2(420, 500);
             window.Show();
         }
 
@@ -75,26 +75,28 @@ namespace Tiloop.ConstraintLinkSetupTool.UI
             {
                 fontStyle = FontStyle.Bold,
                 fontSize = 14,
-                margin = new RectOffset(0, 0, 10, 10)
+                margin = new RectOffset(0, 0, 8, 4)
             };
 
             _stepBoxStyle = new GUIStyle("HelpBox")
             {
                 padding = new RectOffset(10, 10, 10, 10),
-                margin = new RectOffset(0, 0, 5, 10)
+                margin = new RectOffset(0, 0, 0, 8)
             };
 
             _stepTitleStyle = new GUIStyle(EditorStyles.boldLabel)
             {
                 fontSize = 12,
-                margin = new RectOffset(0, 0, 0, 5)
+                margin = new RectOffset(0, 0, 0, 4)
             };
-            
-            _boldHelpBoxStyle = new GUIStyle(EditorStyles.helpBox)
-            {
-                fontSize = 12,
-                fontStyle = FontStyle.Bold
-            };
+        }
+
+        private static void DrawSeparator()
+        {
+            EditorGUILayout.Space(3);
+            var rect = EditorGUILayout.GetControlRect(false, 1);
+            EditorGUI.DrawRect(rect, new Color(0.5f, 0.5f, 0.5f, 0.3f));
+            EditorGUILayout.Space(3);
         }
 
         private void OnGUI()
@@ -103,10 +105,10 @@ namespace Tiloop.ConstraintLinkSetupTool.UI
             InitializeStyles();
 
             EditorGUILayout.BeginHorizontal();
-            GUILayout.Label(_texts.WindowTitle, _headerStyle);
+            GUILayout.Label(_texts.WindowTitle ?? "Constraint Link Setup Tool", _headerStyle);
             GUILayout.FlexibleSpace();
             EditorGUI.BeginChangeCheck();
-            _isEnglish = EditorGUILayout.ToggleLeft(" English", _isEnglish, GUILayout.Width(70));
+            _isEnglish = EditorGUILayout.ToggleLeft("English", _isEnglish, GUILayout.Width(65));
             if (EditorGUI.EndChangeCheck())
             {
                 EditorPrefs.SetBool("ConstraintLink_Lang_EN", _isEnglish);
@@ -114,7 +116,9 @@ namespace Tiloop.ConstraintLinkSetupTool.UI
             }
             EditorGUILayout.EndHorizontal();
 
-            EditorGUILayout.Space(5);
+            DrawSeparator();
+
+            _outerScrollPos = EditorGUILayout.BeginScrollView(_outerScrollPos);
 
             EditorGUI.BeginChangeCheck();
             DrawStep1BaseBoneSetup();
@@ -125,6 +129,8 @@ namespace Tiloop.ConstraintLinkSetupTool.UI
 
             DrawStep2AutoMapping();
             DrawStep3Execute();
+
+            EditorGUILayout.EndScrollView();
         }
 
         private void UpdateAutoMapping()
@@ -136,6 +142,7 @@ namespace Tiloop.ConstraintLinkSetupTool.UI
                     _config.TargetAvatarRoot, _config.TargetProstheticRoot,
                     _config.TargetAvatarBaseBone, _config.TargetProstheticBaseBone,
                     _config.PartSideMode);
+                _constraintsApplied = false;
             }
             else
             {
@@ -146,62 +153,77 @@ namespace Tiloop.ConstraintLinkSetupTool.UI
         private void DrawStep1BaseBoneSetup()
         {
             EditorGUILayout.BeginVertical(_stepBoxStyle);
-            GUILayout.Label(_texts.Step1Title, _stepTitleStyle);
+            GUILayout.Label(_texts.Step1Title ?? "Step 1: Base Bone Setup", _stepTitleStyle);
             EditorGUILayout.HelpBox(_texts.Step1Desc, MessageType.Info);
 
-            EditorGUILayout.Space(5);
+            EditorGUILayout.Space(6);
 
-            EditorGUILayout.LabelField(_texts.ProstheticBaseBone, EditorStyles.boldLabel, GUILayout.Height(30));
-            _config.TargetProstheticBaseBone = (Transform)EditorGUILayout.ObjectField(_config.TargetProstheticBaseBone, typeof(Transform), true);
+            // Prosthetic base bone
+            EditorGUILayout.LabelField(_texts.ProstheticBaseBone ?? "Prosthetic Base Bone", EditorStyles.boldLabel);
+            _config.TargetProstheticBaseBone = (Transform)EditorGUILayout.ObjectField(
+                _config.TargetProstheticBaseBone, typeof(Transform), true);
 
             EditorGUILayout.Space(8);
 
-            EditorGUILayout.LabelField(_texts.AvatarBaseBoneOptional ?? _texts.AvatarBaseBone, EditorStyles.boldLabel, GUILayout.Height(30));
+            // Avatar base bone
+            EditorGUILayout.LabelField(_texts.AvatarBaseBoneOptional ?? "Avatar Base Bone (Optional)", EditorStyles.boldLabel);
+
+            // Resolved bone (always visible, read-only)
+            EditorGUI.BeginDisabledGroup(true);
+            EditorGUILayout.ObjectField(
+                _texts.AutoDetectedAvatarBaseBone ?? "Resolved",
+                _config.TargetAvatarBaseBone, typeof(Transform), true);
+            EditorGUI.EndDisabledGroup();
+
+            if (_config.TargetProstheticBaseBone != null && _config.TargetAvatarBaseBone == null)
+            {
+                EditorGUILayout.HelpBox(
+                    _texts.ErrorAutoResolveAvatarBaseBone ?? _texts.ErrorNoBaseBone,
+                    MessageType.Warning);
+            }
+
+            // Manual override toggle + field
             _config.UseManualAvatarBaseBone = EditorGUILayout.ToggleLeft(
                 _texts.UseManualAvatarBaseBone ?? "Use Manual Avatar Base Bone",
                 _config.UseManualAvatarBaseBone);
 
             if (_config.UseManualAvatarBaseBone)
             {
-                _config.ManualAvatarBaseBone = (Transform)EditorGUILayout.ObjectField(_config.ManualAvatarBaseBone, typeof(Transform), true);
+                EditorGUI.indentLevel++;
+                _config.ManualAvatarBaseBone = (Transform)EditorGUILayout.ObjectField(
+                    _config.ManualAvatarBaseBone, typeof(Transform), true);
+                EditorGUI.indentLevel--;
             }
 
             EditorGUILayout.Space(4);
-            EditorGUILayout.LabelField(_texts.AutoDetectedAvatarBaseBone ?? "Resolved Avatar Base Bone", EditorStyles.miniBoldLabel);
-            EditorGUI.BeginDisabledGroup(true);
-            EditorGUILayout.ObjectField(_config.TargetAvatarBaseBone, typeof(Transform), true);
-            EditorGUI.EndDisabledGroup();
 
-            if (_config.TargetProstheticBaseBone != null && _config.TargetAvatarBaseBone == null)
-            {
-                EditorGUILayout.HelpBox(_texts.ErrorAutoResolveAvatarBaseBone ?? _texts.ErrorNoBaseBone, MessageType.Warning);
-            }
-
-            EditorGUILayout.Space(5);
-            
             // Advanced Settings Foldout
-            _showAdvancedSettings = EditorGUILayout.Foldout(_showAdvancedSettings, _texts.AdvancedFoldout, true, EditorStyles.foldoutHeader);
+            _showAdvancedSettings = EditorGUILayout.Foldout(
+                _showAdvancedSettings, _texts.AdvancedFoldout ?? "Advanced Settings", true, EditorStyles.foldoutHeader);
             if (_showAdvancedSettings)
             {
                 EditorGUI.indentLevel++;
                 EditorGUILayout.BeginVertical("HelpBox");
-                EditorGUILayout.Space(5);
-                
+                EditorGUILayout.Space(4);
+
                 string[] sideOptions =
                 {
                     _texts.SideAuto ?? "Auto",
                     _texts.SideRight ?? "Right",
                     _texts.SideLeft ?? "Left"
                 };
-                _config.PartSideMode = (SideMode)EditorGUILayout.Popup(_texts.SideMode ?? "Side Mode", (int)_config.PartSideMode, sideOptions);
+                _config.PartSideMode = (SideMode)EditorGUILayout.Popup(
+                    _texts.SideMode ?? "Side Mode",
+                    (int)_config.PartSideMode,
+                    sideOptions);
 
-                EditorGUILayout.Space(5);
+                EditorGUILayout.Space(3);
 
                 _debugMode = EditorGUILayout.ToggleLeft(
-                    $"Debug Mode (Assets/Editor/ConstraintLinkSetupTool/Log/)",
+                    "Debug Mode (Assets/Editor/ConstraintLinkSetupTool/Log/)",
                     _debugMode, EditorStyles.miniLabel);
-                
-                EditorGUILayout.Space(5);
+
+                EditorGUILayout.Space(4);
                 EditorGUILayout.EndVertical();
                 EditorGUI.indentLevel--;
             }
@@ -211,58 +233,54 @@ namespace Tiloop.ConstraintLinkSetupTool.UI
 
         private void DrawStep2AutoMapping()
         {
+            int pairCount = _bonePairs != null ? _bonePairs.Count : 0;
+            string step2Header = _texts.Step2Title ?? "Step 2: Mapping Preview";
+            if (pairCount > 0)
+                step2Header += $"  ({pairCount})";
+
             EditorGUILayout.BeginVertical(_stepBoxStyle);
-            GUILayout.Label(_texts.Step2Title, _stepTitleStyle);
-            EditorGUILayout.HelpBox(_texts.Step2Desc, MessageType.Info);
-
-
-            EditorGUILayout.Space(10);
-            GUILayout.Label(_texts.MappingPreview, EditorStyles.boldLabel);
+            GUILayout.Label(step2Header, _stepTitleStyle);
 
             // Table Header
             EditorGUILayout.BeginHorizontal();
-            GUILayout.Space(5);
-            GUILayout.Label(_texts.ColUse, EditorStyles.miniLabel, GUILayout.Width(30));
-            GUILayout.Label(_texts.ColAvatarBone, EditorStyles.miniLabel, GUILayout.MinWidth(80));
-            GUILayout.Label("", GUILayout.Width(25)); // Center spacer
-            GUILayout.Label(_texts.ColProstheticBone, EditorStyles.miniLabel, GUILayout.MinWidth(80));
-            GUILayout.Label("", GUILayout.Width(40)); // Right spacer
+            GUILayout.Label(_texts.ColUse ?? "Use", EditorStyles.miniLabel, GUILayout.Width(28));
+            GUILayout.Label(_texts.ColAvatarBone ?? "Avatar Bone", EditorStyles.miniLabel);
+            GUILayout.Label("", GUILayout.Width(20));
+            GUILayout.Label(_texts.ColProstheticBone ?? "Prosthetic Bone", EditorStyles.miniLabel);
+            GUILayout.Label("", GUILayout.Width(40));
             EditorGUILayout.EndHorizontal();
 
-            // Scroll View for Mappings
-            _scrollPos = EditorGUILayout.BeginScrollView(_scrollPos, "box", GUILayout.MinHeight(150), GUILayout.MaxHeight(250));
-            
-            if (_bonePairs != null && _bonePairs.Count > 0)
+            var lineRect = EditorGUILayout.GetControlRect(false, 1);
+            EditorGUI.DrawRect(lineRect, new Color(0.5f, 0.5f, 0.5f, 0.25f));
+
+            // Scroll view with height adaptive to content
+            float scrollHeight = Mathf.Clamp(pairCount * 21f + 10f, 80f, 260f);
+            _mappingScrollPos = EditorGUILayout.BeginScrollView(
+                _mappingScrollPos, "box", GUILayout.Height(scrollHeight));
+
+            if (pairCount > 0)
             {
                 for (int i = 0; i < _bonePairs.Count; i++)
                 {
                     var pair = _bonePairs[i];
                     EditorGUILayout.BeginHorizontal();
-                    
-                    GUILayout.Space(5);
 
                     pair.ApplyConstraint = EditorGUILayout.Toggle(pair.ApplyConstraint, GUILayout.Width(20));
-                    pair.AvatarBone = (Transform)EditorGUILayout.ObjectField(pair.AvatarBone, typeof(Transform), true, GUILayout.MinWidth(80));
-                    
+                    pair.AvatarBone = (Transform)EditorGUILayout.ObjectField(pair.AvatarBone, typeof(Transform), true);
                     GUILayout.Label("↔", GUILayout.Width(20));
-                    
-                    pair.ProstheticBone = (Transform)EditorGUILayout.ObjectField(pair.ProstheticBone, typeof(Transform), true, GUILayout.MinWidth(80));
-                    
+                    pair.ProstheticBone = (Transform)EditorGUILayout.ObjectField(pair.ProstheticBone, typeof(Transform), true);
+
                     if (pair.IsBaseBone)
-                    {
-                        GUILayout.Label(_texts.LabelBase, EditorStyles.miniBoldLabel, GUILayout.Width(40));
-                    }
+                        GUILayout.Label(_texts.LabelBase ?? "(Base)", EditorStyles.miniBoldLabel, GUILayout.Width(40));
                     else
-                    {
                         GUILayout.Space(44);
-                    }
 
                     EditorGUILayout.EndHorizontal();
                 }
             }
             else
             {
-                EditorGUILayout.HelpBox(_texts.NoMappingMsg, MessageType.Warning);
+                EditorGUILayout.HelpBox(_texts.NoMappingMsg ?? "No mapping generated.", MessageType.Warning);
             }
 
             EditorGUILayout.EndScrollView();
@@ -272,16 +290,22 @@ namespace Tiloop.ConstraintLinkSetupTool.UI
         private void DrawStep3Execute()
         {
             EditorGUILayout.BeginVertical(_stepBoxStyle);
-            GUILayout.Label(_texts.Step3Title, _stepTitleStyle);
+            GUILayout.Label(_texts.Step3Title ?? "Step 3: Execute", _stepTitleStyle);
 
-            EditorGUILayout.Space(5);
+            EditorGUILayout.Space(4);
 
             Color oldBg = GUI.backgroundColor;
-
             bool canExecute = _config.IsValid() && _bonePairs != null && _bonePairs.Count > 0;
+
+            // Applied status indicator
+            if (_constraintsApplied)
+            {
+                EditorGUILayout.HelpBox(_texts.CompleteMsg ?? "Constraints applied.", MessageType.None);
+            }
+
             EditorGUI.BeginDisabledGroup(!canExecute);
-            GUI.backgroundColor = new Color(0.3f, 0.8f, 0.4f);
-            if (GUILayout.Button(_texts.ExecuteBtn ?? "Execute", GUILayout.Height(40)))
+            GUI.backgroundColor = canExecute ? new Color(0.3f, 0.8f, 0.4f) : oldBg;
+            if (GUILayout.Button(_texts.ExecuteBtn ?? "Execute", GUILayout.Height(38)))
             {
                 Undo.IncrementCurrentGroup();
                 Undo.SetCurrentGroupName("Constraint Setup");
@@ -296,13 +320,18 @@ namespace Tiloop.ConstraintLinkSetupTool.UI
             GUI.backgroundColor = oldBg;
             EditorGUI.EndDisabledGroup();
 
-            EditorGUILayout.Space(10);
+            EditorGUILayout.Space(6);
+            DrawSeparator();
 
             EditorGUI.BeginDisabledGroup(!_constraintsApplied);
-            GUI.backgroundColor = new Color(0.9f, 0.4f, 0.4f);
-            if (GUILayout.Button(_texts.RevertBtn ?? "Revert", GUILayout.Height(25)))
+            GUI.backgroundColor = _constraintsApplied ? new Color(0.9f, 0.4f, 0.4f) : oldBg;
+            if (GUILayout.Button(_texts.RevertBtn ?? "Remove Constraints (Revert)", GUILayout.Height(24)))
             {
-                if (EditorUtility.DisplayDialog(_texts.ConfirmRemoveTitle, _texts.ConfirmRemoveMsg, _texts.BtnYes, _texts.BtnCancel))
+                if (EditorUtility.DisplayDialog(
+                    _texts.ConfirmRemoveTitle ?? "Confirm",
+                    _texts.ConfirmRemoveMsg,
+                    _texts.BtnYes ?? "Yes",
+                    _texts.BtnCancel ?? "Cancel"))
                 {
                     Undo.IncrementCurrentGroup();
                     Undo.SetCurrentGroupName("Remove Constraint Setup");
