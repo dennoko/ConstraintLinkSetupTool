@@ -137,6 +137,8 @@ namespace Tiloop.ConstraintLinkSetupTool.Core.Models
         public Transform ProstheticBone { get; set; }
         public bool IsBaseBone { get; set; }
         public bool ApplyConstraint { get; set; } = true;
+        /// <summary>義手サブツリー内を参照するコンストレイントが既に存在する（保護対象あり）</summary>
+        public bool HasInternalConstraint { get; set; }
 
         public BonePair(Transform avatarBone, Transform prostheticBone, bool isBaseBone = false)
         {

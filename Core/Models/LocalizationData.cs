@@ -30,6 +30,7 @@ namespace Tiloop.ConstraintLinkSetupTool.Core.Models
         public string ColAvatarBone;
         public string ColProstheticBone;
         public string LabelBase;
+        public string LabelInternalConstraint;
         public string NoMappingMsg;
         public string ErrorNoBaseBone;
         public string ConfirmRemoveTitle;

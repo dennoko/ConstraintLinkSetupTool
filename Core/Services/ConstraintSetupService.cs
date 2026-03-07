@@ -2,6 +2,8 @@ using System.Collections.Generic;
 using UnityEditor;
 using UnityEngine;
 using UnityEngine.Animations;
+using VRC.Dynamics;
+using VRC.SDK3.Dynamics.Constraint.Components;
 using nadena.dev.modular_avatar.core;
 using Tiloop.ConstraintLinkSetupTool.Core.Models;
 using Tiloop.ConstraintLinkSetupTool.Core.Services.Interfaces;
@@ -15,117 +17,118 @@ namespace Tiloop.ConstraintLinkSetupTool.Core.Services
             if (config == null || !config.IsValid() || bonePairs == null || bonePairs.Count == 0)
                 return;
 
-            // 1. 義手（パーツ）をアバターのルート直下に配置する。
+            // 1. 義手をアバタールート直下に配置
             if (config.TargetProstheticRoot.parent != config.TargetAvatarRoot)
-            {
                 Undo.SetTransformParent(config.TargetProstheticRoot, config.TargetAvatarRoot, "Reparent Prosthetic");
-            }
 
-            // 2. 義手のルートに MA Bone Proxy を設定（アバター側の指定ベースボーンをアンカーとする）
-            SetupMABoneProxy(config.TargetProstheticRoot, config.TargetAvatarBaseBone);
+            // 2. 義手のベースボーンに MA Bone Proxy を設定
+            SetupMABoneProxy(config.TargetProstheticBaseBone, config.TargetAvatarBaseBone);
+
+            Transform prostheticRoot = config.TargetProstheticRoot;
 
             foreach (var pair in bonePairs)
             {
                 if (!pair.ApplyConstraint || pair.AvatarBone == null || pair.ProstheticBone == null)
                     continue;
 
-                // 全てのボーン（ベースボーン含む）に対して Rotation Constraint で回転のみ同期
-                SetupRotationConstraint(pair.ProstheticBone, pair.AvatarBone);
+                SetupVRCRotationConstraint(pair.ProstheticBone, pair.AvatarBone, prostheticRoot);
             }
         }
 
         public void RemoveConstraints(List<BonePair> bonePairs, SetupConfig config)
         {
             if (bonePairs == null) return;
-            
+
             foreach (var pair in bonePairs)
             {
                 if (pair.ProstheticBone == null) continue;
 
-                var rotConstraint = pair.ProstheticBone.GetComponent<RotationConstraint>();
-                if (rotConstraint != null)
+                // 当ツールが追加した VRC Rotation Constraint（ソースが pair.AvatarBone）を削除
+                foreach (var c in pair.ProstheticBone.GetComponents<VRCRotationConstraint>())
                 {
-                    Undo.DestroyObjectImmediate(rotConstraint);
-                }
-                
-                var posConstraint = pair.ProstheticBone.GetComponent<PositionConstraint>();
-                if (posConstraint != null)
-                {
-                    Undo.DestroyObjectImmediate(posConstraint);
+                    if (SourceMatchesAvatarBone(c, pair.AvatarBone))
+                        Undo.DestroyObjectImmediate(c);
                 }
 
-                var parentConstraint = pair.ProstheticBone.GetComponent<ParentConstraint>();
-                if (parentConstraint != null)
+                // 旧バージョン互換: Unity RotationConstraint（ソースが pair.AvatarBone）も削除
+                foreach (var c in pair.ProstheticBone.GetComponents<RotationConstraint>())
                 {
-                    Undo.DestroyObjectImmediate(parentConstraint);
+                    if (SourceMatchesAvatarBone(c, pair.AvatarBone))
+                        Undo.DestroyObjectImmediate(c);
                 }
             }
 
             // MA Bone Proxy の削除
-            if (config != null && config.TargetProstheticRoot != null)
+            if (config != null && config.TargetProstheticBaseBone != null)
             {
-                var proxy = config.TargetProstheticRoot.GetComponent<ModularAvatarBoneProxy>();
+                var proxy = config.TargetProstheticBaseBone.GetComponent<ModularAvatarBoneProxy>();
                 if (proxy != null)
-                {
                     Undo.DestroyObjectImmediate(proxy);
-                }
             }
+        }
+
+        /// <summary>
+        /// VRC Rotation Constraintのいずれかのソースが指定のTransformと一致するか
+        /// </summary>
+        private static bool SourceMatchesAvatarBone(VRCRotationConstraint c, Transform avatarBone)
+        {
+            foreach (var src in c.Sources)
+                if (src.SourceTransform == avatarBone) return true;
+            return false;
+        }
+
+        /// <summary>
+        /// Unity RotationConstraintのいずれかのソースが指定のTransformと一致するか
+        /// </summary>
+        private static bool SourceMatchesAvatarBone(RotationConstraint c, Transform avatarBone)
+        {
+            for (int i = 0; i < c.sourceCount; i++)
+                if (c.GetSource(i).sourceTransform == avatarBone) return true;
+            return false;
         }
 
         private void SetupMABoneProxy(Transform root, Transform anchor)
         {
             var proxy = root.GetComponent<ModularAvatarBoneProxy>();
             if (proxy == null)
-            {
                 proxy = Undo.AddComponent<ModularAvatarBoneProxy>(root.gameObject);
-            }
 
             proxy.target = anchor;
             proxy.attachmentMode = BoneProxyAttachmentMode.AsChildKeepWorldPose;
-            
             EditorUtility.SetDirty(proxy);
         }
 
-        private void SetupRotationConstraint(Transform prostheticBone, Transform avatarScaleBone)
+        private void SetupVRCRotationConstraint(Transform prostheticBone, Transform avatarBone, Transform prostheticRoot)
         {
-            // すでにある場合は破棄または上書き
-            var rotConstraint = prostheticBone.GetComponent<RotationConstraint>();
-            if (rotConstraint == null)
+            // AvatarLink 分類の既存 Rotation/Parent 系コンストレイント（Unity + VRC）を削除
+            // Internal 分類（義手内部参照）のものは保護して触らない
+            foreach (var (component, kind) in ConstraintInspector.GetRotationConstraints(prostheticBone, prostheticRoot))
             {
-                // Componentを追加（Undo対応）
-                rotConstraint = Undo.AddComponent<RotationConstraint>(prostheticBone.gameObject);
+                if (kind == ConstraintClassification.AvatarLink)
+                    Undo.DestroyObjectImmediate(component);
+            }
+            foreach (var (component, kind) in ConstraintInspector.GetParentConstraints(prostheticBone, prostheticRoot))
+            {
+                if (kind == ConstraintClassification.AvatarLink)
+                    Undo.DestroyObjectImmediate(component);
             }
 
-            // オフセット計算をセットアップする（Zeroed out状態を作る）
-            // コンストレイントソースを追加
-            ConstraintSource source = new ConstraintSource
-            {
-                sourceTransform = avatarScaleBone,
-                weight = 1.0f
-            };
-            
-            // ソース追加前にリストをクリア（念のため）
-            for(int i = rotConstraint.sourceCount - 1; i >= 0; i--)
-            {
-                rotConstraint.RemoveSource(i);
-            }
-            rotConstraint.AddSource(source);
+            // VRC Rotation Constraint を追加
+            var constraint = Undo.AddComponent<VRCRotationConstraint>(prostheticBone.gameObject);
 
-            // Activateして現在の姿勢(Offset)をロックする
-            // AtRest に現在のLocal Rotationを保存
-            rotConstraint.rotationAtRest = prostheticBone.localEulerAngles;
-            
-            // 現在の姿勢からターゲットとの差分(Offset)を計算して保持
-            Quaternion avatarRot = avatarScaleBone.rotation;
-            Quaternion prostheticRot = prostheticBone.rotation;
-            // new_rot = avatarRot * rotationOffset
-            Quaternion offset = Quaternion.Inverse(avatarRot) * prostheticRot;
-            rotConstraint.rotationOffset = offset.eulerAngles;
-            
-            // Active ＆ Lock処理
-            rotConstraint.locked = true;
-            rotConstraint.constraintActive = true;
+            // ソースを設定
+            constraint.Sources.Add(new VRCConstraintSource(avatarBone, 1.0f));
+
+            // オフセット計算: 現在の姿勢差分を保持
+            constraint.RotationAtRest = prostheticBone.localEulerAngles;
+            Quaternion offset = Quaternion.Inverse(avatarBone.rotation) * prostheticBone.rotation;
+            constraint.RotationOffset = offset.eulerAngles;
+
+            // アクティブ化
+            constraint.Locked = true;
+            constraint.IsActive = true;
+
+            EditorUtility.SetDirty(constraint);
         }
     }
 }
-

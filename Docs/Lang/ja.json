@@ -23,6 +23,7 @@
     "ColAvatarBone": "アバターボーン",
     "ColProstheticBone": "義手ボーン",
     "LabelBase": "(Base)",
+    "LabelInternalConstraint": "[保護]",
     "NoMappingMsg": "マッピングが生成されていません。\n義手側ベースボーンを指定すると自動的にマッピングされます。",
     "ErrorNoBaseBone": "義手側ベースボーンを指定してください。必要に応じてアバター側を手動指定してください。",
     "ConfirmRemoveTitle": "確認",

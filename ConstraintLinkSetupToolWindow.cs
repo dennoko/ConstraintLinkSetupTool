@@ -26,6 +26,10 @@ namespace Tiloop.ConstraintLinkSetupTool.UI
         private GUIStyle _stepBoxStyle;
         private GUIStyle _stepTitleStyle;
 
+        // Status bar
+        private string _statusMessage = "";
+        private MessageType _statusType = MessageType.None;
+
         // Localization
         private const string LangRelativePath = "Editor/ConstraintLinkSetupTool/Docs/Lang";
         private bool _isEnglish = false;
@@ -89,6 +93,40 @@ namespace Tiloop.ConstraintLinkSetupTool.UI
                 fontSize = 12,
                 margin = new RectOffset(0, 0, 0, 4)
             };
+
+        }
+
+        private void SetStatus(string message, MessageType type)
+        {
+            _statusMessage = message;
+            _statusType = type;
+        }
+
+        private void DrawStatusBar()
+        {
+            DrawSeparator();
+            // レイアウト/リペイント間のコントロール数ずれを避けるため、
+            // BeginHorizontal を使わず Rect ベースの非レイアウト描画にする
+            Rect barRect = EditorGUILayout.GetControlRect(false, 20);
+
+            if (!string.IsNullOrEmpty(_statusMessage))
+            {
+                EditorGUI.DrawRect(barRect, new Color(0.15f, 0.15f, 0.15f, 0.15f));
+
+                string iconName;
+                if (_statusType == MessageType.Error)
+                    iconName = "console.erroricon.sml";
+                else if (_statusType == MessageType.Warning)
+                    iconName = "console.warnicon.sml";
+                else
+                    iconName = "console.infoicon.sml";
+                var icon = EditorGUIUtility.IconContent(iconName);
+
+                Rect iconRect = new Rect(barRect.x + 4, barRect.y + 1, 18, 18);
+                Rect textRect = new Rect(iconRect.xMax + 3, barRect.y + 1, barRect.width - 30, barRect.height);
+                GUI.Label(iconRect, icon);
+                GUI.Label(textRect, _statusMessage, EditorStyles.miniLabel);
+            }
         }
 
         private static void DrawSeparator()
@@ -131,6 +169,8 @@ namespace Tiloop.ConstraintLinkSetupTool.UI
             DrawStep3Execute();
 
             EditorGUILayout.EndScrollView();
+
+            DrawStatusBar();
         }
 
         private void UpdateAutoMapping()
@@ -152,6 +192,15 @@ namespace Tiloop.ConstraintLinkSetupTool.UI
                     _config.TargetAvatarRoot, _config.TargetProstheticRoot,
                     _config.TargetAvatarBaseBone, _config.TargetProstheticBaseBone,
                     _config.PartSideMode);
+
+                // 各ペアの内部参照コンストレイント有無を検出
+                Transform prostheticRoot = _config.TargetProstheticRoot;
+                foreach (var pair in _bonePairs)
+                {
+                    if (pair.ProstheticBone != null && prostheticRoot != null)
+                        pair.HasInternalConstraint = ConstraintInspector.HasInternalConstraints(pair.ProstheticBone, prostheticRoot);
+                }
+
                 _constraintsApplied = false;
             }
             else
@@ -296,7 +345,7 @@ namespace Tiloop.ConstraintLinkSetupTool.UI
             GUILayout.Label(_texts.ColAvatarBone ?? "Avatar Bone", EditorStyles.miniLabel);
             GUILayout.Label("", GUILayout.Width(20));
             GUILayout.Label(_texts.ColProstheticBone ?? "Prosthetic Bone", EditorStyles.miniLabel);
-            GUILayout.Label("", GUILayout.Width(40));
+            GUILayout.Label("", GUILayout.Width(80));
             EditorGUILayout.EndHorizontal();
 
             var lineRect = EditorGUILayout.GetControlRect(false, 1);
@@ -322,7 +371,12 @@ namespace Tiloop.ConstraintLinkSetupTool.UI
                     if (pair.IsBaseBone)
                         GUILayout.Label(_texts.LabelBase ?? "(Base)", EditorStyles.miniBoldLabel, GUILayout.Width(40));
                     else
-                        GUILayout.Space(44);
+                        GUILayout.Space(40);
+
+                    if (pair.HasInternalConstraint)
+                        GUILayout.Label(_texts.LabelInternalConstraint ?? "[Lock]", EditorStyles.miniLabel, GUILayout.Width(38));
+                    else
+                        GUILayout.Space(38);
 
                     EditorGUILayout.EndHorizontal();
                 }
@@ -346,12 +400,6 @@ namespace Tiloop.ConstraintLinkSetupTool.UI
             Color oldBg = GUI.backgroundColor;
             bool canExecute = _config.IsValid() && _bonePairs != null && _bonePairs.Count > 0;
 
-            // Applied status indicator
-            if (_constraintsApplied)
-            {
-                EditorGUILayout.HelpBox(_texts.CompleteMsg ?? "Constraints applied.", MessageType.None);
-            }
-
             EditorGUI.BeginDisabledGroup(!canExecute);
             GUI.backgroundColor = canExecute ? new Color(0.3f, 0.8f, 0.4f) : oldBg;
             if (GUILayout.Button(_texts.ExecuteBtn ?? "Execute", GUILayout.Height(38)))
@@ -364,7 +412,7 @@ namespace Tiloop.ConstraintLinkSetupTool.UI
                 _constraintsApplied = true;
 
                 Undo.CollapseUndoOperations(undoGroup);
-                EditorUtility.DisplayDialog("Complete", _texts.CompleteMsg, "OK");
+                SetStatus(_texts.CompleteMsg ?? "Constraints applied.", MessageType.Info);
             }
             GUI.backgroundColor = oldBg;
             EditorGUI.EndDisabledGroup();
@@ -390,7 +438,7 @@ namespace Tiloop.ConstraintLinkSetupTool.UI
                     _constraintsApplied = false;
 
                     Undo.CollapseUndoOperations(undoGroup);
-                    EditorUtility.DisplayDialog("Complete", _texts.RemovedMsg, "OK");
+                    SetStatus(_texts.RemovedMsg ?? "Constraints removed.", MessageType.Info);
                 }
             }
             GUI.backgroundColor = oldBg;

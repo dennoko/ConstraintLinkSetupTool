@@ -23,6 +23,7 @@
     "ColAvatarBone": "Avatar Bone",
     "ColProstheticBone": "Prosthetic Bone",
     "LabelBase": "(Base)",
+    "LabelInternalConstraint": "[Lock]",
     "NoMappingMsg": "No bone mapping generated.\nMapping will be performed automatically once the Prosthetic Base Bone is assigned.",
     "ErrorNoBaseBone": "Please assign Prosthetic Base Bone. Optionally set Avatar Base Bone manually if needed.",
     "ConfirmRemoveTitle": "Confirm",
