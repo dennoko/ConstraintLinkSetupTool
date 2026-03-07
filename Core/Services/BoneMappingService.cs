@@ -38,7 +38,8 @@ namespace Tiloop.ConstraintLinkSetupTool.Core.Services
             if (sideMode == SideMode.Auto)
             {
                 isRightSide = DetectSide(avatarBaseBone);
-                Debug.Log($"[ConstraintLink] Auto Detected Side: {(isRightSide ? "Right" : "Left")} based on {avatarBaseBone.name}");
+                if (DebugMode)
+                    Debug.Log($"[ConstraintLink] Auto Detected Side: {(isRightSide ? "Right" : "Left")} based on {avatarBaseBone.name}");
             }
             else
             {
@@ -204,7 +205,8 @@ namespace Tiloop.ConstraintLinkSetupTool.Core.Services
             debugLog?.AppendLine($"  Unmatched:  {unmatchedProsthetics.Count - fallbackMatchCount}");
             debugLog?.AppendLine($"  Base Bone:  1");
 
-            Debug.Log($"[ConstraintLink] Matched {bonePairs.Count} bone pairs (Name: {nameMatchCount}, Fallback: {fallbackMatchCount})");
+            if (DebugMode)
+                Debug.Log($"[ConstraintLink] Matched {bonePairs.Count} bone pairs (Name: {nameMatchCount}, Fallback: {fallbackMatchCount})");
 
             // --- Write debug log to file ---
             if (DebugMode && debugLog != null)

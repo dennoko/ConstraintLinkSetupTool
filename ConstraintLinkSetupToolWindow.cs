@@ -7,49 +7,6 @@ using Tiloop.ConstraintLinkSetupTool.Core.Services;
 
 namespace Tiloop.ConstraintLinkSetupTool.UI
 {
-    [System.Serializable]
-    public class LocalizationData
-    {
-        public string WindowTitle;
-        public string Settings;
-        public string Language;
-        public string Step1Title;
-        public string Step1Desc;
-        public string Step2Title;
-        public string Step2Desc;
-        public string Step3Title;
-        
-        public string AvatarBaseBone;
-        public string ProstheticBaseBone;
-        public string AvatarBaseBoneOptional;
-        public string UseManualAvatarBaseBone;
-        public string AutoDetectedAvatarBaseBone;
-        public string ErrorAutoResolveAvatarBaseBone;
-        
-        public string AdvancedFoldout;
-        public string SideMode;
-        public string SideAuto;
-        public string SideRight;
-        public string SideLeft;
-        
-        public string MappingPreview;
-        public string ColUse;
-        public string ColAvatarBone;
-        public string ColProstheticBone;
-        public string LabelBase;
-        public string NoMappingMsg;
-        public string ErrorNoBaseBone;
-        public string ConfirmRemoveTitle;
-        public string ConfirmRemoveMsg;
-        public string BtnYes;
-        public string BtnCancel;
-        public string CompleteMsg;
-        public string RemovedMsg;
-        public string ExecuteBtn;
-        public string RevertBtn;
-        public string ToggleEn;
-    }
-
     public class ConstraintLinkSetupToolWindow : EditorWindow
     {
         private SetupConfig _config = new SetupConfig();
@@ -61,6 +18,7 @@ namespace Tiloop.ConstraintLinkSetupTool.UI
         private Vector2 _scrollPos;
         private bool _showAdvancedSettings = false;
         private bool _debugMode = false;
+        private bool _constraintsApplied = false;
 
         // UI Styles
         private GUIStyle _headerStyle;
@@ -69,9 +27,9 @@ namespace Tiloop.ConstraintLinkSetupTool.UI
         private GUIStyle _boldHelpBoxStyle;
 
         // Localization
+        private const string LangRelativePath = "Editor/ConstraintLinkSetupTool/Docs/Lang";
         private bool _isEnglish = false;
         private LocalizationData _texts;
-        private string _basePath;
 
         [MenuItem("dennokoworks/Constraint Link Setup Tool")]
         public static void ShowWindow()
@@ -85,9 +43,7 @@ namespace Tiloop.ConstraintLinkSetupTool.UI
         {
             _mappingService = new BoneMappingService();
             _setupService = new ConstraintSetupService();
-            
-            _basePath = "Assets/Editor/ConstraintLinkSetupTool/Docs/Lang";
-            
+
             _isEnglish = EditorPrefs.GetBool("ConstraintLink_Lang_EN", false);
             LoadLanguage();
         }
@@ -95,7 +51,7 @@ namespace Tiloop.ConstraintLinkSetupTool.UI
         private void LoadLanguage()
         {
             string fileName = _isEnglish ? "en.json" : "ja.json";
-            string path = Path.Combine(Application.dataPath, _basePath.Replace("Assets/", ""), fileName);
+            string path = Path.Combine(Application.dataPath, LangRelativePath, fileName);
 
             if (File.Exists(path))
             {
@@ -231,12 +187,19 @@ namespace Tiloop.ConstraintLinkSetupTool.UI
                 EditorGUILayout.BeginVertical("HelpBox");
                 EditorGUILayout.Space(5);
                 
-                string[] sideOptions = { _texts.SideAuto, _texts.SideRight, _texts.SideLeft };
-                _config.PartSideMode = (SideMode)EditorGUILayout.Popup(_texts.SideMode, (int)_config.PartSideMode, sideOptions);
-                
+                string[] sideOptions =
+                {
+                    _texts.SideAuto ?? "Auto",
+                    _texts.SideRight ?? "Right",
+                    _texts.SideLeft ?? "Left"
+                };
+                _config.PartSideMode = (SideMode)EditorGUILayout.Popup(_texts.SideMode ?? "Side Mode", (int)_config.PartSideMode, sideOptions);
+
                 EditorGUILayout.Space(5);
-                
-                _debugMode = EditorGUILayout.ToggleLeft("Debug Mode (Log/)", _debugMode, EditorStyles.miniLabel);
+
+                _debugMode = EditorGUILayout.ToggleLeft(
+                    $"Debug Mode (Assets/Editor/ConstraintLinkSetupTool/Log/)",
+                    _debugMode, EditorStyles.miniLabel);
                 
                 EditorGUILayout.Space(5);
                 EditorGUILayout.EndVertical();
@@ -313,30 +276,31 @@ namespace Tiloop.ConstraintLinkSetupTool.UI
 
             EditorGUILayout.Space(5);
 
-            GUI.enabled = _config.IsValid() && _bonePairs != null && _bonePairs.Count > 0;
-            
             Color oldBg = GUI.backgroundColor;
-            GUI.backgroundColor = new Color(0.3f, 0.8f, 0.4f); // Greenish Execute Button
-            if (GUILayout.Button(_texts.ExecuteBtn, GUILayout.Height(40)))
+
+            bool canExecute = _config.IsValid() && _bonePairs != null && _bonePairs.Count > 0;
+            EditorGUI.BeginDisabledGroup(!canExecute);
+            GUI.backgroundColor = new Color(0.3f, 0.8f, 0.4f);
+            if (GUILayout.Button(_texts.ExecuteBtn ?? "Execute", GUILayout.Height(40)))
             {
                 Undo.IncrementCurrentGroup();
                 Undo.SetCurrentGroupName("Constraint Setup");
                 int undoGroup = Undo.GetCurrentGroup();
 
                 _setupService.ApplyConstraints(_bonePairs, _config);
+                _constraintsApplied = true;
 
                 Undo.CollapseUndoOperations(undoGroup);
                 EditorUtility.DisplayDialog("Complete", _texts.CompleteMsg, "OK");
             }
             GUI.backgroundColor = oldBg;
-            GUI.enabled = true;
-            
+            EditorGUI.EndDisabledGroup();
+
             EditorGUILayout.Space(10);
-            
-            GUI.enabled = _bonePairs != null && _bonePairs.Count > 0;
-            
-            GUI.backgroundColor = new Color(0.9f, 0.4f, 0.4f); // Reddish Revert Button
-            if (GUILayout.Button(_texts.RevertBtn, GUILayout.Height(25)))
+
+            EditorGUI.BeginDisabledGroup(!_constraintsApplied);
+            GUI.backgroundColor = new Color(0.9f, 0.4f, 0.4f);
+            if (GUILayout.Button(_texts.RevertBtn ?? "Revert", GUILayout.Height(25)))
             {
                 if (EditorUtility.DisplayDialog(_texts.ConfirmRemoveTitle, _texts.ConfirmRemoveMsg, _texts.BtnYes, _texts.BtnCancel))
                 {
@@ -345,13 +309,14 @@ namespace Tiloop.ConstraintLinkSetupTool.UI
                     int undoGroup = Undo.GetCurrentGroup();
 
                     _setupService.RemoveConstraints(_bonePairs, _config);
+                    _constraintsApplied = false;
 
                     Undo.CollapseUndoOperations(undoGroup);
                     EditorUtility.DisplayDialog("Complete", _texts.RemovedMsg, "OK");
                 }
             }
             GUI.backgroundColor = oldBg;
-            GUI.enabled = true;
+            EditorGUI.EndDisabledGroup();
 
             EditorGUILayout.EndVertical();
         }

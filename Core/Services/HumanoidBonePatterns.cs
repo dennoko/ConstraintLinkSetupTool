@@ -142,9 +142,9 @@ namespace Tiloop.ConstraintLinkSetupTool.Core.Services
             new[] { "Jaw", "J_Adj_C_FaceJaw", "顎" },
             
             // 24-38: Left Hand Fingers
-            new[] { "LeftThumbProximal", "ProximalThumb_Left", "ProximalThumb_L", "Thumb1_L", "ThumbFinger1_L", "LeftHandThumb1", "Thumb Proximal.L", "Thunb1_L", "finger01_01_L", "J_Bip_L_Thumb1" },
-            new[] { "LeftThumbIntermediate", "IntermediateThumb_Left", "IntermediateThumb_L", "Thumb2_L", "ThumbFinger2_L", "LeftHandThumb2", "Thumb Intermediate.L", "Thunb2_L", "finger01_02_L", "J_Bip_L_Thumb2" },
-            new[] { "LeftThumbDistal", "DistalThumb_Left", "DistalThumb_L", "Thumb3_L", "ThumbFinger3_L", "LeftHandThumb3", "Thumb Distal.L", "Thunb3_L", "finger01_03_L", "J_Bip_L_Thumb3" },
+            new[] { "LeftThumbProximal", "ProximalThumb_Left", "ProximalThumb_L", "Thumb1_L", "ThumbFinger1_L", "LeftHandThumb1", "Thumb Proximal.L", "Thumb1_L", "finger01_01_L", "J_Bip_L_Thumb1" },
+            new[] { "LeftThumbIntermediate", "IntermediateThumb_Left", "IntermediateThumb_L", "Thumb2_L", "ThumbFinger2_L", "LeftHandThumb2", "Thumb Intermediate.L", "Thumb2_L", "finger01_02_L", "J_Bip_L_Thumb2" },
+            new[] { "LeftThumbDistal", "DistalThumb_Left", "DistalThumb_L", "Thumb3_L", "ThumbFinger3_L", "LeftHandThumb3", "Thumb Distal.L", "Thumb3_L", "finger01_03_L", "J_Bip_L_Thumb3" },
             
             new[] { "LeftIndexProximal", "ProximalIndex_Left", "ProximalIndex_L", "Index1_L", "IndexFinger1_L", "LeftHandIndex1", "Index Proximal.L", "finger02_01_L", "f_index.01.L", "J_Bip_L_Index1" },
             new[] { "LeftIndexIntermediate", "IntermediateIndex_Left", "IntermediateIndex_L", "Index2_L", "IndexFinger2_L", "LeftHandIndex2", "Index Intermediate.L", "finger02_02_L", "f_index.02.L", "J_Bip_L_Index2" },
@@ -163,9 +163,9 @@ namespace Tiloop.ConstraintLinkSetupTool.Core.Services
             new[] { "LeftLittleDistal", "DistalLittle_Left", "DistalLittle_L", "Little3_L", "LittleFinger3_L", "LeftHandPinky3", "Little Distal.L", "finger05_03_L", "f_pinky.03.L", "J_Bip_L_Little3" },
             
             // 39-53: Right Hand Fingers
-            new[] { "RightThumbProximal", "ProximalThumb_Right", "ProximalThumb_R", "Thumb1_R", "ThumbFinger1_R", "RightHandThumb1", "Thumb Proximal.R", "Thunb1_R", "finger01_01_R", "J_Bip_R_Thumb1" },
-            new[] { "RightThumbIntermediate", "IntermediateThumb_Right", "IntermediateThumb_R", "Thumb2_R", "ThumbFinger2_R", "RightHandThumb2", "Thumb Intermediate.R", "Thunb2_R", "finger01_02_R", "J_Bip_R_Thumb2" },
-            new[] { "RightThumbDistal", "DistalThumb_Right", "DistalThumb_R", "Thumb3_R", "ThumbFinger3_R", "RightHandThumb3", "Thumb Distal.R", "Thunb3_R", "finger01_03_R", "J_Bip_R_Thumb3" },
+            new[] { "RightThumbProximal", "ProximalThumb_Right", "ProximalThumb_R", "Thumb1_R", "ThumbFinger1_R", "RightHandThumb1", "Thumb Proximal.R", "Thumb1_R", "finger01_01_R", "J_Bip_R_Thumb1" },
+            new[] { "RightThumbIntermediate", "IntermediateThumb_Right", "IntermediateThumb_R", "Thumb2_R", "ThumbFinger2_R", "RightHandThumb2", "Thumb Intermediate.R", "Thumb2_R", "finger01_02_R", "J_Bip_R_Thumb2" },
+            new[] { "RightThumbDistal", "DistalThumb_Right", "DistalThumb_R", "Thumb3_R", "ThumbFinger3_R", "RightHandThumb3", "Thumb Distal.R", "Thumb3_R", "finger01_03_R", "J_Bip_R_Thumb3" },
             
             new[] { "RightIndexProximal", "ProximalIndex_Right", "ProximalIndex_R", "Index1_R", "IndexFinger1_R", "RightHandIndex1", "Index Proximal.R", "finger02_01_R", "f_index.01.R", "J_Bip_R_Index1" },
             new[] { "RightIndexIntermediate", "IntermediateIndex_Right", "IntermediateIndex_R", "Index2_R", "IndexFinger2_R", "RightHandIndex2", "Index Intermediate.R", "finger02_02_R", "f_index.02.R", "J_Bip_R_Index2" },

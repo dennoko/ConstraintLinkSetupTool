@@ -1,4 +1,3 @@
-using System.Collections.Generic;
 using System.Text.RegularExpressions;
 using UnityEngine;
 
@@ -9,9 +8,6 @@ namespace Tiloop.ConstraintLinkSetupTool.Core.Services
     /// </summary>
     public static class BoneNameMatcher
     {
-        private static readonly Regex EndNumberPattern = new Regex(@"[_\.][0-9]+$");
-        private static readonly Regex VrmBonePattern = new Regex(@"^([LRC])_(.*)$");
-        private static readonly Regex SideSuffixPattern = new Regex(@"[_\.]([LR])$", RegexOptions.IgnoreCase);
 
         /// <summary>
         /// ボーン名を正規化する
@@ -42,8 +38,18 @@ namespace Tiloop.ConstraintLinkSetupTool.Core.Services
             name = Regex.Replace(name, @"[_\.]l[_\.]", "left");
             name = Regex.Replace(name, @"[_\.]r[_\.]", "right");
 
-            // 数字、スペース、アンダースコア、ドットを除去
-            name = Regex.Replace(name, @"[0-9 ._]", "");
+            // セパレータ（スペース、アンダースコア、ドット）を除去
+            name = Regex.Replace(name, @"[ ._]", "");
+
+            // 3桁以上の連続数字はインスタンス番号として除去（例: _001 → 削除）
+            name = Regex.Replace(name, @"\d{3,}", "");
+
+            // 1〜2桁の数字は先頭ゼロを正規化（例: 01 → 1, 02 → 2）
+            // これにより spine01→spine1, spine02→spine2 が正しく区別される
+            name = Regex.Replace(name, @"0+([1-9])", "$1");
+
+            // 残留するゼロのみの数字列を除去
+            name = Regex.Replace(name, @"0+", "");
 
             return name;
         }
@@ -82,79 +88,6 @@ namespace Tiloop.ConstraintLinkSetupTool.Core.Services
             }
 
             return NormalizeBoneName(avatarBoneName) == NormalizeBoneName(prostheticBoneName);
-        }
-
-        /// <summary>
-        /// ボーン名からマッチする可能性のある全てのHumanBodyBonesを取得
-        /// </summary>
-        public static List<HumanBodyBones> GetPossibleBones(string boneName)
-        {
-            if (string.IsNullOrEmpty(boneName))
-                return new List<HumanBodyBones>();
-
-            var normalized = NormalizeBoneName(boneName);
-
-            if (HumanoidBonePatterns.NameToBoneMap.TryGetValue(normalized, out var bones))
-            {
-                return new List<HumanBodyBones>(bones);
-            }
-
-            return new List<HumanBodyBones>();
-        }
-
-        /// <summary>
-        /// 正規化されたボーン名がヒューマノイドボーンとして認識可能かどうか
-        /// </summary>
-        public static bool IsRecognizedBoneName(string boneName)
-        {
-            if (string.IsNullOrEmpty(boneName))
-                return false;
-
-            var normalized = NormalizeBoneName(boneName);
-            return HumanoidBonePatterns.AllNormalizedBoneNames.Contains(normalized);
-        }
-
-        /// <summary>
-        /// ボーン名からプレフィックスとサフィックスを推定する
-        /// </summary>
-        public static bool TryInferPrefixSuffix(string boneName, string knownBonePart, 
-            out string prefix, out string suffix)
-        {
-            prefix = string.Empty;
-            suffix = string.Empty;
-
-            if (string.IsNullOrEmpty(boneName) || string.IsNullOrEmpty(knownBonePart))
-                return false;
-
-            // 大文字小文字を無視して検索
-            int index = boneName.IndexOf(knownBonePart, System.StringComparison.OrdinalIgnoreCase);
-            if (index < 0)
-                return false;
-
-            prefix = boneName.Substring(0, index);
-            suffix = boneName.Substring(index + knownBonePart.Length);
-            return true;
-        }
-
-        /// <summary>
-        /// プレフィックスとサフィックスを除去してベース名を取得
-        /// </summary>
-        public static string StripPrefixSuffix(string boneName, string prefix, string suffix)
-        {
-            if (string.IsNullOrEmpty(boneName))
-                return boneName;
-
-            if (!string.IsNullOrEmpty(prefix) && boneName.StartsWith(prefix))
-            {
-                boneName = boneName.Substring(prefix.Length);
-            }
-
-            if (!string.IsNullOrEmpty(suffix) && boneName.EndsWith(suffix))
-            {
-                boneName = boneName.Substring(0, boneName.Length - suffix.Length);
-            }
-
-            return boneName;
         }
 
         /// <summary>
