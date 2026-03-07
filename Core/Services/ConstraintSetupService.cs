@@ -31,6 +31,10 @@ namespace Tiloop.ConstraintLinkSetupTool.Core.Services
                 if (!pair.ApplyConstraint || pair.AvatarBone == null || pair.ProstheticBone == null)
                     continue;
 
+                // 内部参照コンストレイントがある場合はスキップ（設定を維持・重複防止）
+                if (pair.HasInternalConstraint)
+                    continue;
+
                 SetupVRCRotationConstraint(pair.ProstheticBone, pair.AvatarBone, prostheticRoot);
             }
         }
