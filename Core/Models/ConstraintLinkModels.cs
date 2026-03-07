@@ -38,12 +38,17 @@ namespace Tiloop.ConstraintLinkSetupTool.Core.Models
             }
         }
 
+        private Transform _autoDetectedAvatarBaseBone;
+
         /// <summary>
-        /// 自動検出されたアバター側ベースボーン（義手側ベースボーンの親）
+        /// 自動検出されたアバター側ベースボーン
+        /// ウィンドウ側でアバター階層を名前検索してセットする
         /// </summary>
-        public Transform AutoDetectedAvatarBaseBone
+        public Transform AutoDetectedAvatarBaseBone => _autoDetectedAvatarBaseBone;
+
+        public void SetAutoDetectedAvatarBaseBone(Transform bone)
         {
-            get { return TargetProstheticBaseBone != null ? TargetProstheticBaseBone.parent : null; }
+            _autoDetectedAvatarBaseBone = bone;
         }
 
         public SideMode PartSideMode = SideMode.Auto;

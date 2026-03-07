@@ -135,6 +135,16 @@ namespace Tiloop.ConstraintLinkSetupTool.UI
 
         private void UpdateAutoMapping()
         {
+            if (_config.TargetProstheticBaseBone != null)
+            {
+                _config.SetAutoDetectedAvatarBaseBone(
+                    FindMatchingAvatarBone(_config.TargetProstheticBaseBone));
+            }
+            else
+            {
+                _config.SetAutoDetectedAvatarBaseBone(null);
+            }
+
             if (_config.TargetAvatarBaseBone != null && _config.TargetProstheticBaseBone != null)
             {
                 _mappingService.DebugMode = _debugMode;
@@ -148,6 +158,45 @@ namespace Tiloop.ConstraintLinkSetupTool.UI
             {
                 if (_bonePairs != null) _bonePairs.Clear();
             }
+        }
+
+        /// <summary>
+        /// 義手側ベースボーンと同名のボーンをアバター階層から検索する
+        /// 義手サブツリーは検索対象から除外する
+        /// </summary>
+        private Transform FindMatchingAvatarBone(Transform prostheticBaseBone)
+        {
+            if (prostheticBaseBone == null || prostheticBaseBone.parent == null)
+                return null;
+
+            Transform attachmentParent = prostheticBaseBone.parent;
+            Transform avatarRoot = attachmentParent.root;
+            string normalizedTarget = BoneNameMatcher.NormalizeBoneName(prostheticBaseBone.name);
+
+            // prostheticBaseBoneからattachmentParentの直接の子まで上に辿る（除外サブツリー特定）
+            Transform prostheticSubtreeRoot = prostheticBaseBone;
+            while (prostheticSubtreeRoot.parent != attachmentParent)
+            {
+                if (prostheticSubtreeRoot.parent == null)
+                    return attachmentParent; // 想定外の構造: 親にフォールバック
+                prostheticSubtreeRoot = prostheticSubtreeRoot.parent;
+            }
+
+            // アバター階層全体を検索（義手サブツリーを除外）
+            Transform found = SearchHierarchyForBone(avatarRoot, prostheticSubtreeRoot, normalizedTarget);
+            return found ?? attachmentParent; // 見つからない場合は元の挙動（親）にフォールバック
+        }
+
+        private static Transform SearchHierarchyForBone(Transform current, Transform excludeSubtree, string normalizedName)
+        {
+            if (current == excludeSubtree) return null;
+            if (BoneNameMatcher.NormalizeBoneName(current.name) == normalizedName) return current;
+            foreach (Transform child in current)
+            {
+                var result = SearchHierarchyForBone(child, excludeSubtree, normalizedName);
+                if (result != null) return result;
+            }
+            return null;
         }
 
         private void DrawStep1BaseBoneSetup()
